@@ -33,6 +33,16 @@
   --font: "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei",
     "Hiragino Sans GB", "Noto Sans SC", "Helvetica Neue", Arial, sans-serif;
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  /* 装饰层令牌（浅色：暖纸 + 墨绿/琥珀淡影） */
+  --deco-grain-opacity: 0.035;
+  --deco-grid-color: rgba(15, 118, 110, 0.13);
+  --deco-glow-teal: rgba(15, 118, 110, 0.1);
+  --deco-glow-amber: rgba(217, 119, 6, 0.08);
+  --deco-hairline: rgba(28, 25, 23, 0.16);
+  --deco-accent-dot: #d97706;
+  --deco-card-edge: rgba(15, 118, 110, 0.22);
+  --deco-fold: #d97706;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -62,6 +72,16 @@
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
     --shadow-md: 0 8px 22px rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.3);
     --shadow-lg: 0 20px 44px rgba(0, 0, 0, 0.55), 0 4px 12px rgba(0, 0, 0, 0.35);
+
+    /* 装饰层令牌（深色：墨绿黑底 + 青绿/琥珀微光） */
+    --deco-grain-opacity: 0.05;
+    --deco-grid-color: rgba(20, 184, 166, 0.16);
+    --deco-glow-teal: rgba(20, 184, 166, 0.12);
+    --deco-glow-amber: rgba(245, 158, 11, 0.1);
+    --deco-hairline: rgba(245, 245, 244, 0.18);
+    --deco-accent-dot: #f59e0b;
+    --deco-card-edge: rgba(20, 184, 166, 0.3);
+    --deco-fold: #f59e0b;
   }
 }
 

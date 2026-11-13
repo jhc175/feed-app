@@ -93,8 +93,13 @@ chirp/
 | `GET` | `/api/posts` | — | `200` `{ "posts": Post[] }`（`createdAt` 倒序） |
 | `GET` | `/api/posts/:id` | — | `200` `{ "post": Post }` |
 | `POST` | `/api/posts` | `{ "content": string }` | `201` `{ "post": Post }` + `Location` 头 |
-| `PATCH` | `/api/posts/:id` | `{ "liked": boolean }` | `200` `{ "post": Post }` |
+| `PATCH` | `/api/posts/:id` | `{ "liked"?: boolean, "bookmarked"?: boolean }` | `200` `{ "post": Post }` |
+| `POST` | `/api/posts/:id/repost` | `{ "content"?: string }`（可完全省略 body） | `201` `{ "post": Post }` + `Location` 头 |
 | `DELETE` | `/api/posts/:id` | — | `204` 无 body |
+
+- `GET /api/posts` 支持查询参数 `bookmarked`：`?bookmarked=true` 只返回已收藏的帖子，其它值或不带参数返回全部
+- `PATCH /api/posts/:id` 是局部更新：`liked` / `bookmarked` 至少出现一个，出现就必须是布尔值
+- `POST /api/posts/:id/repost` 的 `content` 是转发语，可以省略（纯转发）；转发语 trim 后为空也按纯转发处理，不会报 `empty_content`
 
 失败响应统一为：
 
@@ -105,9 +110,9 @@ chirp/
 | `code` | 状态码 | 触发条件 |
 | --- | --- | --- |
 | `invalid_body` | `400` | 非法 JSON、缺字段、字段类型不对 |
-| `empty_content` | `422` | `content` trim 后为空 |
-| `too_long` | `422` | `content` 码点数超过 280 |
-| `not_found` | `404` | id 不存在，或路径不存在 |
+| `empty_content` | `422` | `content` trim 后为空（仅 `POST /api/posts`） |
+| `too_long` | `422` | `content` 或转发语码点数超过 280 |
+| `not_found` | `404` | id 不存在（含转发的源帖不存在），或路径不存在 |
 
 ### 数据模型
 
@@ -116,18 +121,49 @@ chirp/
   "id": "0f9c3a1e-6b1c-4b7e-9c2f-2f7a1d8b6c11",
   "content": "第一条短文。\n换行会被保留。",
   "createdAt": 1763000000000,
-  "liked": false
+  "liked": false,
+  "bookmarked": false,
+  "repostOf": null,
+  "repostCount": 0
+}
+```
+
+转发帖的样子（`repostOf` 是源帖的值快照）：
+
+```json
+{
+  "id": "6d0e2b44-1c8f-4f6a-9b3d-7c5a2e9f4d10",
+  "content": "值得一转",
+  "createdAt": 1763000005000,
+  "liked": false,
+  "bookmarked": false,
+  "repostOf": {
+    "id": "0f9c3a1e-6b1c-4b7e-9c2f-2f7a1d8b6c11",
+    "content": "第一条短文。\n换行会被保留。",
+    "createdAt": 1763000000000
+  },
+  "repostCount": 0
 }
 ```
 
 - `id`：由服务端生成，`crypto.randomUUID()`，不支持时降级为 `p-<时间戳>-<随机串>`
-- `content`：服务端 `trim` 后的文本，按 Unicode 码点计数，上限 280
+- `content`：服务端 `trim` 后的文本，按 Unicode 码点计数，上限 280；纯转发（不带转发语）时为空字符串
 - `createdAt`：epoch 毫秒，由服务端写入
 - `liked`：是否已点赞，初始为 `false`
+- `bookmarked`：是否已收藏，初始为 `false`
+- `repostOf`：`null` 表示原创；非 `null` 表示这是转发，值为源帖的 `{ id, content, createdAt }` 快照
+- `repostCount`：被转发次数，初始为 `0`
+
+转发是**扁平**的：转发一条转发帖时，新帖的 `repostOf` 指向最初的原帖而不是那条转发帖，因此 `repostOf` 永远只有一层，不会嵌套。
 
 ### 存储
 
-服务端用进程内的数组保存全部帖子，重启即清空。每条返回给调用方的数据都是副本，外部改动不会污染存储内部状态。
+服务端用进程内的数组保存全部帖子，重启即清空。每条返回给调用方的数据都是副本（`repostOf` 也复制一层），外部改动不会污染存储内部状态。
+
+- 列表排序：`createdAt` 倒序，`createdAt` 相同时后插入的在前；`GET /api/posts?bookmarked=true` 复用同一顺序
+- 转发计数：转发成功时最初原帖的 `repostCount` 加一；删除自己的转发帖时回退一次（不低于 0）
+- 删除源帖**不级联**删除转发帖：转发帖仍能正常读取，`repostOf` 快照完好，之后继续基于它转发时计数不再变化
+- 删除未命中的 id 返回 `false`，不改动任何数据
 
 需要重置时重启后端进程即可。
 

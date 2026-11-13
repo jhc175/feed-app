@@ -3,7 +3,7 @@ import type { Context } from 'hono'
 import { MAX_LENGTH } from '../src/lib/text'
 import { createPostStore } from './store'
 import type { PostStore } from './store'
-import { validateContent, validateLiked } from './validate'
+import { validateContent, validatePostPatch, validateRepostContent } from './validate'
 import type { ValidationCode } from './validate'
 
 type ErrorCode = ValidationCode | 'not_found'
@@ -28,9 +28,23 @@ function failure(c: Context, code: ErrorCode, message: string = MESSAGES[code]) 
 
 type JsonBody = { ok: true; value: unknown } | { ok: false }
 
+/**
+ * 读取 JSON 请求体。
+ * 「完全没有 body」视为 `undefined` 交给调用方决定语义（转发允许无 body），
+ * 只有「有 body 但不是合法 JSON」才算失败。
+ */
 async function readJsonBody(c: Context): Promise<JsonBody> {
+  let raw: string
   try {
-    return { ok: true, value: await c.req.json() }
+    raw = await c.req.text()
+  } catch {
+    return { ok: false }
+  }
+
+  if (raw.trim() === '') return { ok: true, value: undefined }
+
+  try {
+    return { ok: true, value: JSON.parse(raw) }
   } catch {
     return { ok: false }
   }
@@ -45,7 +59,10 @@ export function createApp(store: PostStore = createPostStore()): Hono {
 
   app.get('/api/health', (c) => c.json({ status: 'ok' }))
 
-  app.get('/api/posts', (c) => c.json({ posts: store.list() }))
+  app.get('/api/posts', (c) => {
+    const onlyBookmarked = c.req.query('bookmarked') === 'true'
+    return c.json({ posts: onlyBookmarked ? store.listBookmarked() : store.list() })
+  })
 
   app.get('/api/posts/:id', (c) => {
     const post = store.find(c.req.param('id'))
@@ -69,12 +86,26 @@ export function createApp(store: PostStore = createPostStore()): Hono {
     const body = await readJsonBody(c)
     if (!body.ok) return failure(c, 'invalid_body')
 
-    const parsed = validateLiked(body.value)
+    const parsed = validatePostPatch(body.value)
     if (!parsed.ok) return failure(c, parsed.code)
 
-    const post = store.setLiked(c.req.param('id'), parsed.liked)
+    const post = store.setFlags(c.req.param('id'), parsed.patch)
     if (!post) return failure(c, 'not_found')
     return c.json({ post })
+  })
+
+  app.post('/api/posts/:id/repost', async (c) => {
+    const body = await readJsonBody(c)
+    if (!body.ok) return failure(c, 'invalid_body')
+
+    const parsed = validateRepostContent(body.value)
+    if (!parsed.ok) return failure(c, parsed.code)
+
+    const post = store.createRepost(c.req.param('id'), parsed.content)
+    if (!post) return failure(c, 'not_found')
+
+    c.header('Location', `/api/posts/${post.id}`)
+    return c.json({ post }, 201)
   })
 
   app.delete('/api/posts/:id', (c) => {

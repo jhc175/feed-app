@@ -1,5 +1,10 @@
-# 依赖与构建产物（本项目无依赖，保留以备扩展）
+# 依赖
 node_modules/
+
+# 构建与测试产物
+dist/
+coverage/
+.vite/
 
 # 编辑器 / IDE
 .vscode/
@@ -12,6 +17,11 @@ node_modules/
 Thumbs.db
 desktop.ini
 
-# 日志
+# 日志与本地环境
 *.log
 npm-debug.log*
+*.local
+
+# 浏览器验证产物
+.playwright-cli/
+shot-*.png

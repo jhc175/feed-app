@@ -1,0 +1,32 @@
+{
+  "name": "chirp",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "description": "Chirp —— 一个只在本机运行的极简短文分享工具",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc --noEmit",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "pinia": "^4.1.0",
+    "vue": "^3.5.45"
+  },
+  "devDependencies": {
+    "@pinia/testing": "^2.0.2",
+    "@types/node": "^26.6.6",
+    "@vitejs/plugin-vue": "^6.0.11",
+    "@vitest/coverage-v8": "^5.1.0",
+    "@vue/test-utils": "^2.5.1",
+    "jsdom": "^31.0.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.0",
+    "vue-tsc": "^3.3.14"
+  }
+}

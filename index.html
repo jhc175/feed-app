@@ -7,76 +7,9 @@
   <meta name="color-scheme" content="light dark" />
   <title>Chirp · 写点什么，让它飞出去</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230F766E'/%3E%3Cpath d='M7 20c4-7 9.5-10.5 15-10.5 2.4 0 3.7 1.2 3.7 3 0 3.4-3.3 6.2-7.6 6.2-2.3 0-4.4-.9-5.8-2.4' fill='none' stroke='%23FBF7F0' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
-  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <a class="skip-link" href="#composer">跳到发布区</a>
-
-  <header class="site-header">
-    <div class="site-header__inner">
-      <div class="brand">
-        <span class="brand__mark" aria-hidden="true">
-          <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M6.6 6.6h18.8a2.6 2.6 0 0 1 2.6 2.6v9.2a2.6 2.6 0 0 1-2.6 2.6h-11.5l-5.2 4v-4H6.6a2.6 2.6 0 0 1-2.6-2.6V9.2a2.6 2.6 0 0 1 2.6-2.6Z" />
-            <path d="M11.2 12.7h9.6M11.2 16.5h5.9" />
-          </svg>
-        </span>
-        <div class="brand__text">
-          <p class="brand__title">Chirp</p>
-          <p class="brand__sub">写点什么，让它飞出去</p>
-        </div>
-      </div>
-      <p class="site-header__meta" id="postCount">0 条短文</p>
-    </div>
-  </header>
-
-  <main class="page">
-    <section class="composer" id="composer" aria-labelledby="composerTitle">
-      <h1 class="sr-only" id="composerTitle">发布一条短文</h1>
-      <label class="sr-only" for="composerInput">短文内容</label>
-      <textarea
-        id="composerInput"
-        class="composer__input"
-        rows="3"
-        spellcheck="false"
-        placeholder="此刻在想什么？随手写下几句……"
-        autocomplete="off"
-      ></textarea>
-      <div class="composer__footer">
-        <p class="counter" id="counter" aria-live="polite">0 / 280</p>
-        <button class="btn btn--primary" id="publishBtn" type="button" disabled>发布</button>
-      </div>
-      <p class="composer__hint">Ctrl / ⌘ + Enter 快捷发布 · 内容仅保存在本机浏览器</p>
-    </section>
-
-    <section class="timeline" aria-labelledby="timelineTitle">
-      <div class="timeline__head">
-        <h2 class="timeline__title" id="timelineTitle">时间线</h2>
-        <span class="timeline__rule" aria-hidden="true"></span>
-      </div>
-
-      <ul class="timeline__list" id="timeline"></ul>
-
-      <div class="empty" id="emptyState">
-        <span class="empty__art" aria-hidden="true">
-          <svg viewBox="0 0 96 96" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M46 24h28a9 9 0 0 1 9 9v19a9 9 0 0 1-9 9H62l-11 9.5V61H46a9 9 0 0 1-9-9V33a9 9 0 0 1 9-9Z" />
-            <path d="M48.5 37h21M48.5 46h13" />
-            <path d="M26 35c2.9 3.9 2.9 8.8 0 12.7M16.5 30c5 6.4 5 15.6 0 22" opacity=".55" />
-          </svg>
-        </span>
-        <p class="empty__title">还没有任何短文</p>
-        <p class="empty__text">写下第一条，让这条时间线开始滚动。</p>
-      </div>
-    </section>
-  </main>
-
-  <footer class="site-footer">
-    <p>Chirp · 纯本地存档，不联网、不上传，清空浏览器数据会一并清空。</p>
-  </footer>
-
-  <div class="toast" id="toast" role="status" aria-live="polite"></div>
-
-  <script src="app.js" defer></script>
+  <div id="app"></div>
+  <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

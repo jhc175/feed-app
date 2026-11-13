@@ -11,7 +11,16 @@ vi.mock('../../lib/api')
 const createPostMock = vi.mocked(createPost)
 
 function makePost(overrides: Partial<Post> = {}): Post {
-  return { id: 'server-1', content: '一条短文', createdAt: 2_000, liked: false, ...overrides }
+  return {
+    id: 'server-1',
+    content: '一条短文',
+    createdAt: 2_000,
+    liked: false,
+    bookmarked: false,
+    repostOf: null,
+    repostCount: 0,
+    ...overrides
+  }
 }
 
 function mountComposer() {

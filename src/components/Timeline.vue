@@ -16,18 +16,47 @@ onUnmounted(() => {
   window.clearInterval(ticker)
 })
 
+/** 正在删除中的帖子 id：同一条被连续点击时只发一次 DELETE、只弹一次 toast */
+const pendingDeleteIds = new Set<string>()
+
 async function handleDelete(id: string): Promise<void> {
-  const ok = await store.remove(id)
-  if (ok) {
-    emit('notify', '已删除', 'success')
-    return
+  if (pendingDeleteIds.has(id)) return
+  pendingDeleteIds.add(id)
+
+  try {
+    const ok = await store.remove(id)
+    if (ok) {
+      emit('notify', '已删除', 'success')
+      return
+    }
+    emit('notify', '删除失败：服务端未响应', 'error')
+  } finally {
+    pendingDeleteIds.delete(id)
   }
-  emit('notify', '删除失败：服务端未响应', 'error')
 }
 
 async function handleToggleLike(id: string): Promise<void> {
   const ok = await store.toggleLike(id)
   if (!ok) emit('notify', '操作失败：服务端未响应', 'error')
+}
+
+async function handleToggleBookmark(id: string): Promise<void> {
+  const wasBookmarked = store.posts.find((post) => post.id === id)?.bookmarked ?? false
+  const ok = await store.toggleBookmark(id)
+  if (!ok) {
+    emit('notify', '操作失败：服务端未响应', 'error')
+    return
+  }
+  emit('notify', wasBookmarked ? '已取消收藏' : '已收藏', 'success')
+}
+
+async function handleRepost(id: string): Promise<void> {
+  const ok = await store.repost(id)
+  if (!ok) {
+    emit('notify', '转发失败：服务端未响应', 'error')
+    return
+  }
+  emit('notify', '已转发', 'success')
 }
 </script>
 
@@ -36,16 +65,40 @@ async function handleToggleLike(id: string): Promise<void> {
     <div class="timeline__head">
       <h2 id="timelineTitle" class="timeline__title">时间线</h2>
       <span class="timeline__rule" aria-hidden="true"></span>
+      <div class="filter" role="group" aria-label="筛选时间线">
+        <button
+          class="filter__btn"
+          :class="{ 'is-active': !store.bookmarkedOnly }"
+          data-testid="filter-all"
+          type="button"
+          :aria-pressed="!store.bookmarkedOnly"
+          @click="store.bookmarkedOnly = false"
+        >
+          全部
+        </button>
+        <button
+          class="filter__btn"
+          :class="{ 'is-active': store.bookmarkedOnly }"
+          data-testid="filter-bookmarked"
+          type="button"
+          :aria-pressed="store.bookmarkedOnly"
+          @click="store.bookmarkedOnly = true"
+        >
+          收藏 {{ store.bookmarkedTotal }}
+        </button>
+      </div>
     </div>
 
-    <TransitionGroup v-if="store.total > 0" tag="ul" name="post" class="timeline__list">
+    <TransitionGroup v-if="store.visiblePosts.length > 0" tag="ul" name="post" class="timeline__list">
       <PostCard
-        v-for="post in store.sortedPosts"
+        v-for="post in store.visiblePosts"
         :key="post.id"
         :post="post"
         :now="now"
         @delete="handleDelete"
         @toggle-like="handleToggleLike"
+        @toggle-bookmark="handleToggleBookmark"
+        @repost="handleRepost"
       />
     </TransitionGroup>
 
@@ -72,8 +125,14 @@ async function handleToggleLike(id: string): Promise<void> {
           <path d="M62 79c4.6 3 9.4 3 14.4 0" opacity=".32" />
         </svg>
       </span>
-      <p class="empty__title">还没有任何短文</p>
-      <p class="empty__text">写下第一条，让这条时间线开始滚动。</p>
+      <template v-if="store.bookmarkedOnly">
+        <p class="empty__title">还没有收藏任何内容</p>
+        <p class="empty__text">点一下卡片上的书签，把喜欢的短文留在这里。</p>
+      </template>
+      <template v-else>
+        <p class="empty__title">还没有任何短文</p>
+        <p class="empty__text">写下第一条，让这条时间线开始滚动。</p>
+      </template>
     </div>
   </section>
 </template>

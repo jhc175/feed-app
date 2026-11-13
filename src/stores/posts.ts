@@ -1,17 +1,29 @@
 import { computed, shallowRef } from 'vue'
 import { defineStore } from 'pinia'
 import type { AddResult, Post } from '../types/post'
-import { createPost, deletePost, listPosts, setPostLiked } from '../lib/api'
+import {
+  createPost,
+  deletePost,
+  listPosts,
+  repostPost,
+  updatePost
+} from '../lib/api'
 import { MAX_LENGTH, countChars } from '../lib/text'
 
 export const usePostsStore = defineStore('posts', () => {
   const posts = shallowRef<Post[]>([])
   const lastAddedId = shallowRef<string | null>(null)
   const loading = shallowRef(false)
+  /** 时间线是否只看收藏 */
+  const bookmarkedOnly = shallowRef(false)
 
   const sortedPosts = computed(() => [...posts.value].sort((a, b) => b.createdAt - a.createdAt))
+  const visiblePosts = computed(() =>
+    bookmarkedOnly.value ? sortedPosts.value.filter((post) => post.bookmarked) : sortedPosts.value
+  )
   const total = computed(() => posts.value.length)
   const likedTotal = computed(() => posts.value.filter((post) => post.liked).length)
+  const bookmarkedTotal = computed(() => posts.value.filter((post) => post.bookmarked).length)
 
   async function load(): Promise<boolean> {
     loading.value = true
@@ -48,7 +60,16 @@ export const usePostsStore = defineStore('posts', () => {
       return false
     }
 
-    posts.value = posts.value.filter((post) => post.id !== id)
+    const removed = posts.value.find((post) => post.id === id)
+    const sourceId = removed?.repostOf?.id ?? null
+
+    posts.value = posts.value
+      .filter((post) => post.id !== id)
+      .map((post) =>
+        sourceId !== null && post.id === sourceId
+          ? { ...post, repostCount: Math.max(0, post.repostCount - 1) }
+          : post
+      )
     return true
   }
 
@@ -57,7 +78,7 @@ export const usePostsStore = defineStore('posts', () => {
     if (!current) return false
 
     try {
-      const updated = await setPostLiked(id, !current.liked)
+      const updated = await updatePost(id, { liked: !current.liked })
       posts.value = posts.value.map((post) => (post.id === id ? updated : post))
       return true
     } catch {
@@ -65,5 +86,55 @@ export const usePostsStore = defineStore('posts', () => {
     }
   }
 
-  return { posts, lastAddedId, loading, sortedPosts, total, likedTotal, load, add, remove, toggleLike }
+  async function toggleBookmark(id: string): Promise<boolean> {
+    const current = posts.value.find((post) => post.id === id)
+    if (!current) return false
+
+    try {
+      const updated = await updatePost(id, { bookmarked: !current.bookmarked })
+      posts.value = posts.value.map((post) => (post.id === id ? updated : post))
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /** 转发某条帖子：新帖插到首位，源帖转发数本地 +1。 */
+  async function repost(id: string): Promise<boolean> {
+    const target = posts.value.find((post) => post.id === id)
+    if (!target) return false
+
+    try {
+      const created = await repostPost(id)
+      const sourceId = created.repostOf?.id ?? id
+      posts.value = [
+        created,
+        ...posts.value.map((post) =>
+          post.id === sourceId ? { ...post, repostCount: post.repostCount + 1 } : post
+        )
+      ]
+      lastAddedId.value = created.id
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  return {
+    posts,
+    lastAddedId,
+    loading,
+    bookmarkedOnly,
+    sortedPosts,
+    visiblePosts,
+    total,
+    likedTotal,
+    bookmarkedTotal,
+    load,
+    add,
+    remove,
+    toggleLike,
+    toggleBookmark,
+    repost
+  }
 })

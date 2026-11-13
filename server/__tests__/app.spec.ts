@@ -18,6 +18,16 @@ async function createOne(app: Hono, content: string): Promise<Post> {
   return body.post
 }
 
+async function readPost(res: Response): Promise<Post> {
+  const body = (await res.json()) as { post: Post }
+  return body.post
+}
+
+async function readPosts(res: Response): Promise<Post[]> {
+  const body = (await res.json()) as { posts: Post[] }
+  return body.posts
+}
+
 async function readError(res: Response): Promise<{ code: string; message: string }> {
   const body = (await res.json()) as { error: { code: string; message: string } }
   expect(typeof body.error.code).toBe('string')
@@ -49,10 +59,50 @@ describe('GET /api/posts', () => {
     const second = await createOne(app, '第二条')
 
     const res = await app.request('/api/posts')
-    const body = (await res.json()) as { posts: Post[] }
+    const posts = await readPosts(res)
 
-    expect(body.posts).toHaveLength(2)
-    expect(body.posts.map((post) => post.id)).toEqual([second.id, first.id])
+    expect(posts).toHaveLength(2)
+    expect(posts.map((post) => post.id)).toEqual([second.id, first.id])
+  })
+
+  it('bookmarked=true 只返回已收藏的帖子', async () => {
+    const app = createApp()
+    const first = await createOne(app, '收藏一')
+    const second = await createOne(app, '未收藏')
+    const third = await createOne(app, '收藏二')
+
+    await sendJson(app, 'PATCH', `/api/posts/${first.id}`, { bookmarked: true })
+    await sendJson(app, 'PATCH', `/api/posts/${third.id}`, { bookmarked: true })
+
+    const res = await app.request('/api/posts?bookmarked=true')
+    const posts = await readPosts(res)
+
+    expect(res.status).toBe(200)
+    expect(posts.map((post) => post.id)).toEqual([third.id, first.id])
+    expect(posts.some((post) => post.id === second.id)).toBe(false)
+  })
+
+  it('bookmarked=false 与无参数等价，返回全部', async () => {
+    const app = createApp()
+    const first = await createOne(app, '一')
+    await createOne(app, '二')
+    await sendJson(app, 'PATCH', `/api/posts/${first.id}`, { bookmarked: true })
+
+    const filtered = await readPosts(await app.request('/api/posts?bookmarked=false'))
+    const plain = await readPosts(await app.request('/api/posts'))
+
+    expect(filtered).toHaveLength(2)
+    expect(filtered.map((post) => post.id)).toEqual(plain.map((post) => post.id))
+  })
+
+  it('bookmarked 为其它值时返回全部', async () => {
+    const app = createApp()
+    await createOne(app, '一')
+    await createOne(app, '二')
+
+    const posts = await readPosts(await app.request('/api/posts?bookmarked=yes'))
+
+    expect(posts).toHaveLength(2)
   })
 })
 
@@ -64,13 +114,16 @@ describe('POST /api/posts', () => {
     expect(res.status).toBe(201)
     expect(res.headers.get('Content-Type')).toContain('application/json')
 
-    const body = (await res.json()) as { post: Post }
-    expect(typeof body.post.id).toBe('string')
-    expect(body.post.id.length).toBeGreaterThan(0)
-    expect(body.post.content).toBe('你好 chirp')
-    expect(typeof body.post.createdAt).toBe('number')
-    expect(body.post.liked).toBe(false)
-    expect(res.headers.get('Location')).toBe(`/api/posts/${body.post.id}`)
+    const post = await readPost(res)
+    expect(typeof post.id).toBe('string')
+    expect(post.id.length).toBeGreaterThan(0)
+    expect(post.content).toBe('你好 chirp')
+    expect(typeof post.createdAt).toBe('number')
+    expect(post.liked).toBe(false)
+    expect(post.bookmarked).toBe(false)
+    expect(post.repostOf).toBeNull()
+    expect(post.repostCount).toBe(0)
+    expect(res.headers.get('Location')).toBe(`/api/posts/${post.id}`)
   })
 
   it('280 个 emoji 也能创建成功', async () => {
@@ -140,19 +193,65 @@ describe('GET /api/posts/:id', () => {
 })
 
 describe('PATCH /api/posts/:id', () => {
-  it('设 liked 为 true 返回 200 且 post.liked 为 true，再设回 false', async () => {
+  it('只改 liked 时 bookmarked 保持不变', async () => {
     const app = createApp()
     const created = await createOne(app, '点赞对象')
 
-    const likedRes = await sendJson(app, 'PATCH', `/api/posts/${created.id}`, { liked: true })
-    expect(likedRes.status).toBe(200)
-    const likedBody = (await likedRes.json()) as { post: Post }
-    expect(likedBody.post.liked).toBe(true)
+    const res = await sendJson(app, 'PATCH', `/api/posts/${created.id}`, { liked: true })
+    expect(res.status).toBe(200)
 
-    const unlikedRes = await sendJson(app, 'PATCH', `/api/posts/${created.id}`, { liked: false })
-    expect(unlikedRes.status).toBe(200)
-    const unlikedBody = (await unlikedRes.json()) as { post: Post }
-    expect(unlikedBody.post.liked).toBe(false)
+    const post = await readPost(res)
+    expect(post.liked).toBe(true)
+    expect(post.bookmarked).toBe(false)
+  })
+
+  it('只改 bookmarked 时 liked 保持不变', async () => {
+    const app = createApp()
+    const created = await createOne(app, '收藏对象')
+
+    const res = await sendJson(app, 'PATCH', `/api/posts/${created.id}`, { bookmarked: true })
+    expect(res.status).toBe(200)
+
+    const post = await readPost(res)
+    expect(post.bookmarked).toBe(true)
+    expect(post.liked).toBe(false)
+  })
+
+  it('同时改 liked 与 bookmarked', async () => {
+    const app = createApp()
+    const created = await createOne(app, '同时改')
+
+    const res = await sendJson(app, 'PATCH', `/api/posts/${created.id}`, {
+      liked: true,
+      bookmarked: true
+    })
+    expect(res.status).toBe(200)
+
+    const post = await readPost(res)
+    expect(post).toMatchObject({ liked: true, bookmarked: true })
+  })
+
+  it('可以改回 false', async () => {
+    const app = createApp()
+    const created = await createOne(app, '取消')
+    await sendJson(app, 'PATCH', `/api/posts/${created.id}`, { liked: true, bookmarked: true })
+
+    const res = await sendJson(app, 'PATCH', `/api/posts/${created.id}`, {
+      liked: false,
+      bookmarked: false
+    })
+
+    expect((await readPost(res))).toMatchObject({ liked: false, bookmarked: false })
+  })
+
+  it('空 body 返回 400 invalid_body', async () => {
+    const app = createApp()
+    const created = await createOne(app, '空 patch')
+
+    const res = await sendJson(app, 'PATCH', `/api/posts/${created.id}`, {})
+
+    expect(res.status).toBe(400)
+    expect((await readError(res)).code).toBe('invalid_body')
   })
 
   it('liked 非法返回 400 invalid_body', async () => {
@@ -173,6 +272,130 @@ describe('PATCH /api/posts/:id', () => {
   })
 })
 
+describe('POST /api/posts/:id/repost', () => {
+  it('完全无 body 时按纯转发处理，返回 201 与新帖', async () => {
+    const app = createApp()
+    const source = await createOne(app, '原帖内容')
+
+    const res = await app.request(`/api/posts/${source.id}/repost`, { method: 'POST' })
+
+    expect(res.status).toBe(201)
+
+    const post = await readPost(res)
+    expect(post.content).toBe('')
+    expect(post.repostOf).toEqual({
+      id: source.id,
+      content: '原帖内容',
+      createdAt: source.createdAt
+    })
+    expect(post.liked).toBe(false)
+    expect(post.bookmarked).toBe(false)
+    expect(post.repostCount).toBe(0)
+    expect(res.headers.get('Location')).toBe(`/api/posts/${post.id}`)
+
+    const sourceAfter = await readPost(await app.request(`/api/posts/${source.id}`))
+    expect(sourceAfter.repostCount).toBe(1)
+  })
+
+  it('空 JSON 对象也按纯转发处理', async () => {
+    const app = createApp()
+    const source = await createOne(app, '原帖')
+
+    const res = await sendJson(app, 'POST', `/api/posts/${source.id}/repost`, {})
+
+    expect(res.status).toBe(201)
+    expect((await readPost(res)).content).toBe('')
+  })
+
+  it('带转发语时返回 201 且 content 已 trim', async () => {
+    const app = createApp()
+    const source = await createOne(app, '原帖')
+
+    const res = await sendJson(app, 'POST', `/api/posts/${source.id}/repost`, {
+      content: '  值得一转  '
+    })
+
+    expect(res.status).toBe(201)
+    expect((await readPost(res)).content).toBe('值得一转')
+  })
+
+  it('纯空白的转发语按纯转发处理，不报 empty_content', async () => {
+    const app = createApp()
+    const source = await createOne(app, '原帖')
+
+    const res = await sendJson(app, 'POST', `/api/posts/${source.id}/repost`, { content: '   ' })
+
+    expect(res.status).toBe(201)
+    expect((await readPost(res)).content).toBe('')
+  })
+
+  it('转发转发帖时扁平化指向最初原帖', async () => {
+    const app = createApp()
+    const source = await createOne(app, '最初原帖')
+    const firstRes = await app.request(`/api/posts/${source.id}/repost`, { method: 'POST' })
+    const firstRepost = await readPost(firstRes)
+
+    const secondRes = await sendJson(app, 'POST', `/api/posts/${firstRepost.id}/repost`, {
+      content: '转发的转发'
+    })
+    const secondRepost = await readPost(secondRes)
+
+    expect(secondRepost.repostOf?.id).toBe(source.id)
+    expect(secondRepost.repostOf?.content).toBe('最初原帖')
+
+    const sourceAfter = await readPost(await app.request(`/api/posts/${source.id}`))
+    const firstAfter = await readPost(await app.request(`/api/posts/${firstRepost.id}`))
+    expect(sourceAfter.repostCount).toBe(2)
+    expect(firstAfter.repostCount).toBe(0)
+  })
+
+  it('转发语超过 280 码点返回 422 too_long', async () => {
+    const app = createApp()
+    const source = await createOne(app, '原帖')
+
+    const res = await sendJson(app, 'POST', `/api/posts/${source.id}/repost`, {
+      content: 'a'.repeat(281)
+    })
+
+    expect(res.status).toBe(422)
+    expect((await readError(res)).code).toBe('too_long')
+  })
+
+  it('源帖不存在返回 404 not_found 且不写入', async () => {
+    const app = createApp()
+
+    const res = await sendJson(app, 'POST', '/api/posts/missing/repost', { content: '转发' })
+
+    expect(res.status).toBe(404)
+    expect((await readError(res)).code).toBe('not_found')
+    expect(await readPosts(await app.request('/api/posts'))).toEqual([])
+  })
+
+  it('非法 JSON body 返回 400 invalid_body', async () => {
+    const app = createApp()
+    const source = await createOne(app, '原帖')
+
+    const res = await app.request(`/api/posts/${source.id}/repost`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{'
+    })
+
+    expect(res.status).toBe(400)
+    expect((await readError(res)).code).toBe('invalid_body')
+  })
+
+  it('content 不是字符串返回 400 invalid_body', async () => {
+    const app = createApp()
+    const source = await createOne(app, '原帖')
+
+    const res = await sendJson(app, 'POST', `/api/posts/${source.id}/repost`, { content: 123 })
+
+    expect(res.status).toBe(400)
+    expect((await readError(res)).code).toBe('invalid_body')
+  })
+})
+
 describe('DELETE /api/posts/:id', () => {
   it('删除成功返回 204 且响应体为空，随后 GET 返回 404', async () => {
     const app = createApp()
@@ -185,14 +408,27 @@ describe('DELETE /api/posts/:id', () => {
     expect((await app.request(`/api/posts/${created.id}`)).status).toBe(404)
   })
 
-  it('删除后列表为空', async () => {
+  it('删除后列表不再包含该帖', async () => {
     const app = createApp()
-    const created = await createOne(app, '唯一的条目')
+    const kept = await createOne(app, '保留')
+    const removed = await createOne(app, '删除')
 
-    await app.request(`/api/posts/${created.id}`, { method: 'DELETE' })
+    await app.request(`/api/posts/${removed.id}`, { method: 'DELETE' })
 
-    const res = await app.request('/api/posts')
-    expect(await res.json()).toEqual({ posts: [] })
+    const posts = await readPosts(await app.request('/api/posts'))
+    expect(posts.map((post) => post.id)).toEqual([kept.id])
+  })
+
+  it('删除已点赞、已收藏的帖子', async () => {
+    const app = createApp()
+    const created = await createOne(app, '带状态')
+    await sendJson(app, 'PATCH', `/api/posts/${created.id}`, { liked: true, bookmarked: true })
+
+    const res = await app.request(`/api/posts/${created.id}`, { method: 'DELETE' })
+
+    expect(res.status).toBe(204)
+    expect(await readPosts(await app.request('/api/posts'))).toEqual([])
+    expect(await readPosts(await app.request('/api/posts?bookmarked=true'))).toEqual([])
   })
 
   it('重复删除返回 404', async () => {
@@ -204,6 +440,45 @@ describe('DELETE /api/posts/:id', () => {
 
     expect(res.status).toBe(404)
     expect((await readError(res)).code).toBe('not_found')
+  })
+
+  it('删除转发帖后源帖 repostCount 回退', async () => {
+    const app = createApp()
+    const source = await createOne(app, '原帖')
+    const repost = await readPost(
+      await app.request(`/api/posts/${source.id}/repost`, { method: 'POST' })
+    )
+
+    await app.request(`/api/posts/${repost.id}`, { method: 'DELETE' })
+
+    const sourceAfter = await readPost(await app.request(`/api/posts/${source.id}`))
+    expect(sourceAfter.repostCount).toBe(0)
+  })
+
+  it('删除源帖后转发帖仍可读取，快照完好且列表保留它', async () => {
+    const app = createApp()
+    const source = await createOne(app, '将被删的原帖')
+    const repost = await readPost(
+      await app.request(`/api/posts/${source.id}/repost`, { method: 'POST' })
+    )
+
+    await app.request(`/api/posts/${source.id}`, { method: 'DELETE' })
+
+    const res = await app.request(`/api/posts/${repost.id}`)
+    expect(res.status).toBe(200)
+
+    const still = await readPost(res)
+    expect(still.repostOf).toEqual({
+      id: source.id,
+      content: '将被删的原帖',
+      createdAt: source.createdAt
+    })
+
+    const posts = await readPosts(await app.request('/api/posts'))
+    expect(posts.map((post) => post.id)).toEqual([repost.id])
+
+    const deleteAgain = await app.request(`/api/posts/${repost.id}`, { method: 'DELETE' })
+    expect(deleteAgain.status).toBe(204)
   })
 })
 

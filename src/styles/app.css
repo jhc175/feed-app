@@ -744,3 +744,190 @@
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ============================================================
+   转发 / 收藏 / 筛选（追加，不复用旧规则）
+   ============================================================ */
+
+/* 收藏用的琥珀软背景：色相跟随 --accent，深浅模式各自一套透明度 */
+:root {
+  --bookmark: var(--accent);
+  --bookmark-soft: rgba(217, 119, 6, 0.1);
+  --bookmark-edge: rgba(217, 119, 6, 0.34);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bookmark-soft: rgba(245, 158, 11, 0.14);
+    --bookmark-edge: rgba(245, 158, 11, 0.38);
+  }
+}
+
+/* 转发与收藏按钮：尺寸、节奏与 .post__like 保持一致 */
+.post__repost,
+.post__bookmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 34px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.55;
+  cursor: pointer;
+  transition: color 0.16s var(--ease), background 0.16s var(--ease), opacity 0.16s var(--ease),
+    transform 0.16s var(--ease);
+}
+
+.post__bookmark {
+  width: 34px;
+  justify-content: center;
+  padding: 0;
+}
+
+.post__repost svg,
+.post__bookmark svg {
+  width: 17px;
+  height: 17px;
+}
+
+.post:hover .post__repost,
+.post:hover .post__bookmark,
+.post__repost:focus-visible,
+.post__bookmark:focus-visible {
+  opacity: 1;
+}
+
+.post__repost:hover {
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.post__repost:active {
+  transform: scale(0.92);
+}
+
+.post__bookmark:hover {
+  color: var(--bookmark);
+  background: var(--bookmark-soft);
+}
+
+/* 收藏用琥珀，与点赞的品牌红区分开 */
+.post__bookmark.is-bookmarked {
+  color: var(--bookmark);
+  opacity: 1;
+}
+
+.post__bookmark:active {
+  transform: scale(0.92);
+}
+
+.post__repost:focus-visible,
+.post__bookmark:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.post__bookmark:focus-visible {
+  outline-color: var(--bookmark);
+}
+
+/* 引用块：左侧细边 + 稍浅背景，正文最多三行 */
+.post__quote {
+  margin: 0 0 9px;
+  padding: 9px 12px 10px 13px;
+  border-left: 2px solid var(--bookmark-edge);
+  border-radius: 0 10px 10px 0;
+  background: var(--surface-2);
+}
+
+.post__quote-label {
+  margin: 0 0 3px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  color: var(--bookmark);
+  opacity: 0.9;
+}
+
+.post__quote-content {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--text-soft);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* 时间线筛选分段控件 */
+.filter {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+.filter__btn {
+  height: 26px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.16s var(--ease), background 0.16s var(--ease);
+}
+
+.filter__btn:hover {
+  color: var(--text-soft);
+  background: var(--surface-2);
+}
+
+.filter__btn.is-active {
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.filter__btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+@media (max-width: 480px) {
+  .timeline__head {
+    gap: 8px;
+  }
+
+  .post__repost,
+  .post__bookmark {
+    height: 44px;
+    opacity: 0.8;
+  }
+
+  .post__bookmark {
+    width: 44px;
+  }
+
+  .filter__btn {
+    padding: 0 9px;
+    font-size: 11.5px;
+  }
+}

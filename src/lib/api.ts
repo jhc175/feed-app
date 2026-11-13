@@ -1,4 +1,4 @@
-import type { Post } from '../types/post'
+import type { Post, RepostSource } from '../types/post'
 
 export const API_BASE_URL = '/api'
 
@@ -23,8 +23,30 @@ interface RequestOptions {
   body?: unknown
 }
 
+export type PostPatch = {
+  liked?: boolean
+  bookmarked?: boolean
+}
+
+export type ListPostsOptions = {
+  bookmarkedOnly?: boolean
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
+}
+
+/** 转发时对源帖做的快照：id / content / createdAt 三者齐备才算合法。 */
+function isRepostSource(value: unknown): value is RepostSource {
+  if (!isRecord(value)) return false
+
+  return (
+    typeof value.id === 'string' &&
+    value.id.length > 0 &&
+    typeof value.content === 'string' &&
+    typeof value.createdAt === 'number' &&
+    Number.isFinite(value.createdAt)
+  )
 }
 
 function isPost(value: unknown): value is Post {
@@ -36,7 +58,12 @@ function isPost(value: unknown): value is Post {
     typeof value.content === 'string' &&
     typeof value.createdAt === 'number' &&
     Number.isFinite(value.createdAt) &&
-    typeof value.liked === 'boolean'
+    typeof value.liked === 'boolean' &&
+    typeof value.bookmarked === 'boolean' &&
+    (value.repostOf === null || isRepostSource(value.repostOf)) &&
+    typeof value.repostCount === 'number' &&
+    Number.isFinite(value.repostCount) &&
+    value.repostCount >= 0
   )
 }
 
@@ -93,8 +120,9 @@ function extractPost(payload: unknown): Post {
   return post
 }
 
-export async function listPosts(): Promise<Post[]> {
-  const res = await request('/posts')
+export async function listPosts(options: ListPostsOptions = {}): Promise<Post[]> {
+  const path = options.bookmarkedOnly ? '/posts?bookmarked=true' : '/posts'
+  const res = await request(path)
   const payload = await readJson(res)
 
   if (!isRecord(payload) || !Array.isArray(payload.posts)) {
@@ -116,10 +144,21 @@ export async function createPost(content: string): Promise<Post> {
   return extractPost(await readJson(res))
 }
 
-export async function setPostLiked(id: string, liked: boolean): Promise<Post> {
+/** 局部更新点赞 / 收藏状态。 */
+export async function updatePost(id: string, patch: PostPatch): Promise<Post> {
   const res = await request(`/posts/${encodeURIComponent(id)}`, {
     method: 'PATCH',
-    body: { liked }
+    body: patch
+  })
+  return extractPost(await readJson(res))
+}
+
+/** 转发某条帖子；不传 content 时发送空对象，表示纯转发。 */
+export async function repostPost(id: string, content?: string): Promise<Post> {
+  const body = content === undefined ? {} : { content }
+  const res = await request(`/posts/${encodeURIComponent(id)}/repost`, {
+    method: 'POST',
+    body
   })
   return extractPost(await readJson(res))
 }

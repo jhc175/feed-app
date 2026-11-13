@@ -16,18 +16,18 @@ onUnmounted(() => {
   window.clearInterval(ticker)
 })
 
-function handleDelete(id: string): void {
-  if (store.remove(id)) {
+async function handleDelete(id: string): Promise<void> {
+  const ok = await store.remove(id)
+  if (ok) {
     emit('notify', '已删除', 'success')
     return
   }
-  emit('notify', '删除失败：本地存储不可用', 'error')
+  emit('notify', '删除失败：服务端未响应', 'error')
 }
 
-function handleToggleLike(id: string): void {
-  if (!store.toggleLike(id)) {
-    emit('notify', '操作失败：本地存储不可用', 'error')
-  }
+async function handleToggleLike(id: string): Promise<void> {
+  const ok = await store.toggleLike(id)
+  if (!ok) emit('notify', '操作失败：服务端未响应', 'error')
 }
 </script>
 
@@ -49,6 +49,8 @@ function handleToggleLike(id: string): void {
       />
     </TransitionGroup>
 
+    <p v-else-if="store.loading" class="empty" data-testid="loading-state">加载中…</p>
+
     <div v-else class="empty" data-testid="empty-state">
       <span class="empty__art" aria-hidden="true">
         <svg
@@ -64,6 +66,10 @@ function handleToggleLike(id: string): void {
           />
           <path d="M48.5 37h21M48.5 46h13" />
           <path d="M26 35c2.9 3.9 2.9 8.8 0 12.7M16.5 30c5 6.4 5 15.6 0 22" opacity=".55" />
+          <circle cx="34" cy="19" r="2" fill="currentColor" stroke="none" opacity=".42" />
+          <circle cx="78" cy="70" r="2.6" fill="currentColor" stroke="none" opacity=".28" />
+          <circle cx="22" cy="67" r="1.6" fill="currentColor" stroke="none" opacity=".26" />
+          <path d="M62 79c4.6 3 9.4 3 14.4 0" opacity=".32" />
         </svg>
       </span>
       <p class="empty__title">还没有任何短文</p>

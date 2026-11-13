@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onUnmounted, shallowRef } from 'vue'
+import { onMounted, onUnmounted, shallowRef } from 'vue'
+import AppBackdrop from './components/AppBackdrop.vue'
 import AppHeader from './components/AppHeader.vue'
 import AppToast from './components/AppToast.vue'
 import Composer from './components/Composer.vue'
@@ -9,7 +10,6 @@ import { usePostsStore } from './stores/posts'
 type ToastTone = 'success' | 'error' | 'info'
 
 const store = usePostsStore()
-store.load()
 
 const toastMessage = shallowRef('')
 const toastTone = shallowRef<ToastTone>('info')
@@ -28,6 +28,11 @@ function notify(message: string, tone: ToastTone = 'info'): void {
   }, 2200)
 }
 
+onMounted(async () => {
+  const ok = await store.load()
+  if (!ok) notify('加载失败：无法连接后端服务', 'error')
+})
+
 onUnmounted(() => {
   window.clearTimeout(toastTimer)
 })
@@ -35,6 +40,8 @@ onUnmounted(() => {
 
 <template>
   <a class="skip-link" href="#composerInput">跳到发布区</a>
+
+  <AppBackdrop />
 
   <AppHeader :total="store.total" />
 
@@ -44,7 +51,22 @@ onUnmounted(() => {
   </main>
 
   <footer class="site-footer">
-    <p>Chirp · 纯本地存档，不联网、不上传，清空浏览器数据会一并清空。</p>
+    <svg
+      class="site-footer__divider"
+      viewBox="0 0 260 12"
+      preserveAspectRatio="none"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        d="M2 6c16-7 32 7 48 0s32 7 48 0 32 7 48 0 32 7 48 0 32 7 48 0"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1"
+        stroke-linecap="round"
+      />
+    </svg>
+    <p>Chirp · 数据保存在本机后端服务，刷新页面不会丢失。</p>
   </footer>
 
   <AppToast :message="toastMessage" :tone="toastTone" :visible="toastVisible" />

@@ -1,56 +1,69 @@
 import { computed, shallowRef } from 'vue'
 import { defineStore } from 'pinia'
 import type { AddResult, Post } from '../types/post'
-import { createId } from '../lib/id'
-import { loadPosts, savePosts } from '../lib/storage'
+import { createPost, deletePost, listPosts, setPostLiked } from '../lib/api'
 import { MAX_LENGTH, countChars } from '../lib/text'
 
 export const usePostsStore = defineStore('posts', () => {
   const posts = shallowRef<Post[]>([])
   const lastAddedId = shallowRef<string | null>(null)
+  const loading = shallowRef(false)
 
   const sortedPosts = computed(() => [...posts.value].sort((a, b) => b.createdAt - a.createdAt))
   const total = computed(() => posts.value.length)
   const likedTotal = computed(() => posts.value.filter((post) => post.liked).length)
 
-  function load(): void {
-    posts.value = loadPosts()
-    lastAddedId.value = null
+  async function load(): Promise<boolean> {
+    loading.value = true
+    try {
+      posts.value = await listPosts()
+      lastAddedId.value = null
+      return true
+    } catch {
+      return false
+    } finally {
+      loading.value = false
+    }
   }
 
-  function add(content: string): AddResult {
+  async function add(content: string): Promise<AddResult> {
     const trimmed = content.trim()
     if (!trimmed) return { ok: false, reason: 'empty' }
     if (countChars(trimmed) > MAX_LENGTH) return { ok: false, reason: 'too-long' }
 
-    const post: Post = { id: createId(), content: trimmed, createdAt: Date.now(), liked: false }
-    const next = [post, ...posts.value]
-    if (!savePosts(next)) return { ok: false, reason: 'storage' }
-
-    posts.value = next
-    lastAddedId.value = post.id
-    return { ok: true, post }
+    try {
+      const post = await createPost(trimmed)
+      posts.value = [post, ...posts.value]
+      lastAddedId.value = post.id
+      return { ok: true, post }
+    } catch {
+      return { ok: false, reason: 'network' }
+    }
   }
 
-  function remove(id: string): boolean {
-    if (!posts.value.some((post) => post.id === id)) return false
+  async function remove(id: string): Promise<boolean> {
+    try {
+      await deletePost(id)
+    } catch {
+      return false
+    }
 
-    const next = posts.value.filter((post) => post.id !== id)
-    if (!savePosts(next)) return false
-
-    posts.value = next
+    posts.value = posts.value.filter((post) => post.id !== id)
     return true
   }
 
-  function toggleLike(id: string): boolean {
-    if (!posts.value.some((post) => post.id === id)) return false
+  async function toggleLike(id: string): Promise<boolean> {
+    const current = posts.value.find((post) => post.id === id)
+    if (!current) return false
 
-    const next = posts.value.map((post) => (post.id === id ? { ...post, liked: !post.liked } : post))
-    if (!savePosts(next)) return false
-
-    posts.value = next
-    return true
+    try {
+      const updated = await setPostLiked(id, !current.liked)
+      posts.value = posts.value.map((post) => (post.id === id ? updated : post))
+      return true
+    } catch {
+      return false
+    }
   }
 
-  return { posts, lastAddedId, sortedPosts, total, likedTotal, load, add, remove, toggleLike }
+  return { posts, lastAddedId, loading, sortedPosts, total, likedTotal, load, add, remove, toggleLike }
 })

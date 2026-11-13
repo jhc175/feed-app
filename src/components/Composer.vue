@@ -8,6 +8,7 @@ const emit = defineEmits<{ notify: [message: string, tone: 'success' | 'error'] 
 
 const store = usePostsStore()
 const draft = shallowRef('')
+const submitting = shallowRef(false)
 const textarea = useTemplateRef<HTMLTextAreaElement>('textarea')
 
 const length = computed(() => countChars(draft.value))
@@ -19,27 +20,32 @@ const counterText = computed(() => `${length.value} / ${MAX_LENGTH}`)
 const failureMessages: Record<AddFailureReason, string> = {
   empty: '先写点什么再发布吧',
   'too-long': `已超出 ${MAX_LENGTH} 字上限`,
-  storage: '本地存储不可用或已满，请先删除部分内容'
+  network: '发布失败：无法连接后端服务'
 }
 
-function publish(): void {
-  if (!canPublish.value) return
+async function publish(): Promise<void> {
+  if (!canPublish.value || submitting.value) return
 
-  const result = store.add(draft.value)
-  if (!result.ok) {
-    emit('notify', failureMessages[result.reason], 'error')
-    return
+  submitting.value = true
+  try {
+    const result = await store.add(draft.value)
+    if (!result.ok) {
+      emit('notify', failureMessages[result.reason], 'error')
+      return
+    }
+
+    draft.value = ''
+    textarea.value?.focus()
+    emit('notify', '已发布', 'success')
+  } finally {
+    submitting.value = false
   }
-
-  draft.value = ''
-  textarea.value?.focus()
-  emit('notify', '已发布', 'success')
 }
 
 function handleKeydown(event: KeyboardEvent): void {
   if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
     event.preventDefault()
-    publish()
+    void publish()
   }
 }
 </script>
@@ -73,12 +79,12 @@ function handleKeydown(event: KeyboardEvent): void {
         class="btn btn--primary"
         data-testid="composer-submit"
         type="button"
-        :disabled="!canPublish"
+        :disabled="!canPublish || submitting"
         @click="publish"
       >
-        发布
+        {{ submitting ? '发布中…' : '发布' }}
       </button>
     </div>
-    <p class="composer__hint">Ctrl / ⌘ + Enter 快捷发布 · 内容仅保存在本机浏览器</p>
+    <p class="composer__hint">Ctrl / ⌘ + Enter 快捷发布 · 内容会保存到本机后端</p>
   </section>
 </template>

@@ -5,7 +5,10 @@
   "type": "module",
   "description": "Chirp —— 一个只在本机运行的极简短文分享工具",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently -n web,api -c cyan,magenta \"npm:dev:web\" \"npm:dev:api\"",
+    "dev:web": "vite",
+    "dev:api": "tsx watch server/index.ts",
+    "start": "tsx server/index.ts",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit",
@@ -14,6 +17,8 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@hono/node-server": "^2.1.8",
+    "hono": "^4.13.18",
     "pinia": "^4.1.0",
     "vue": "^3.5.45"
   },
@@ -23,7 +28,9 @@
     "@vitejs/plugin-vue": "^6.0.11",
     "@vitest/coverage-v8": "^5.1.0",
     "@vue/test-utils": "^2.5.1",
+    "concurrently": "^10.0.7",
     "jsdom": "^31.0.0",
+    "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "vite": "^8.3.8",
     "vitest": "^5.1.0",

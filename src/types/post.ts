@@ -5,7 +5,7 @@ export interface Post {
   liked: boolean
 }
 
-export type AddFailureReason = 'empty' | 'too-long' | 'storage'
+export type AddFailureReason = 'empty' | 'too-long' | 'network'
 
 export type AddResult =
   | { ok: true; post: Post }
